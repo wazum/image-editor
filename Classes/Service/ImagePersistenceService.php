@@ -29,6 +29,12 @@ final readonly class ImagePersistenceService
         'webp' => 'image/webp',
     ];
 
+    /**
+     * Metadata fields that describe the file itself, not its content, so a
+     * copy gets its own values from indexing.
+     */
+    private const METADATA_OF_THE_FILE = ['file', 'width', 'height', 'categories'];
+
     private const JPEG_QUALITY = 90;
     private const WEBP_QUALITY = 90;
 
@@ -61,6 +67,7 @@ final readonly class ImagePersistenceService
                 GeneralUtility::unlink_tempfile($tempPath);
             }
         }
+        $this->copyMetaData($original, $newFile);
 
         $this->eventDispatcher->dispatch(new ImageEditedEvent($original, $newFile, 'copy', $binary));
 
@@ -87,6 +94,27 @@ final readonly class ImagePersistenceService
         $this->eventDispatcher->dispatch(new ImageEditedEvent($target, $target, 'overwrite', $binary));
 
         return $target;
+    }
+
+    /**
+     * Gives the copy the editorial metadata of the original (title, alternative
+     * text, description and fields such as the copyright of EXT:filemetadata).
+     */
+    private function copyMetaData(File $original, File $copy): void
+    {
+        $ctrl = $GLOBALS['TCA']['sys_file_metadata']['ctrl'] ?? [];
+        $ownFields = [...self::METADATA_OF_THE_FILE];
+        foreach (['crdate', 'tstamp', 'languageField', 'transOrigPointerField', 'transOrigDiffSourceField', 'translationSource'] as $key) {
+            if (is_string($ctrl[$key] ?? null)) {
+                $ownFields[] = $ctrl[$key];
+            }
+        }
+        $fields = array_diff(array_keys($GLOBALS['TCA']['sys_file_metadata']['columns'] ?? []), $ownFields);
+        $values = array_intersect_key($original->getMetaData()->get(), array_flip($fields));
+        if ($values === []) {
+            return;
+        }
+        $copy->getMetaData()->add($values)->save();
     }
 
     private function buildBaseName(string $desired, File $original): string

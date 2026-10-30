@@ -81,6 +81,26 @@ final class ImagePersistenceServiceTest extends FunctionalTestCase
     }
 
     #[\PHPUnit\Framework\Attributes\Test]
+    public function saveCopyKeepsTheMetadataOfTheOriginal(): void
+    {
+        $original = $this->createOriginalFile('photo.png');
+        $original->getMetaData()->add([
+            'title' => 'Team',
+            'alternative' => 'Four people at a table',
+            'description' => 'The team in 2026',
+        ])->save();
+
+        $new = $this->service()->saveCopy($original, $this->imageBytes('png'), 'edited');
+
+        $metaData = $new->getMetaData()->get();
+        self::assertSame('Team', $metaData['title']);
+        self::assertSame('Four people at a table', $metaData['alternative']);
+        self::assertSame('The team in 2026', $metaData['description']);
+        self::assertSame(2, (int)$metaData['width']);
+        self::assertNotSame($original->getUid(), (int)$metaData['file']);
+    }
+
+    #[\PHPUnit\Framework\Attributes\Test]
     public function overwriteReencodesBytesToMatchTargetExtension(): void
     {
         $original = $this->createRealOriginalFile('photo.webp', $this->imageBytes('webp'));
